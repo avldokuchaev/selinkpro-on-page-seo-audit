@@ -53,6 +53,48 @@ async function scrapePageData() {
     }
   } catch(e) {}
 
+
+
+  
+  const robotsStatus = { checked: false, allowed: true, rule: '', sitemaps: [] }; 
+  try {
+    const rbRes = await fetch(location.origin + '/robots.txt');
+    if (rbRes.ok) {
+      robotsStatus.checked = true;
+      const rbText = await rbRes.text();
+      const lines = rbText.split('\n').map(l => l.trim().toLowerCase());
+      let isTargetUA = false;
+      const currentPath = (location.pathname + location.search).toLowerCase();
+
+      for (let line of lines) {
+        
+        if (line.startsWith('sitemap:')) {
+          const smUrl = line.substring(8).trim();
+          if (smUrl && !robotsStatus.sitemaps.includes(smUrl)) {
+            robotsStatus.sitemaps.push(smUrl);
+          }
+        }
+        
+        
+        if (line.startsWith('user-agent:')) {
+          const ua = line.split(':')[1].trim();
+          isTargetUA = (ua === '*' || ua.includes('googlebot'));
+        } else if (isTargetUA && line.includes(':')) {
+          const [directive, path] = line.split(/:(.+)/).map(s => s.trim());
+          if (path && (directive === 'disallow' || directive === 'allow')) {
+            const regexStr = '^' + path.replace(/([.+?^=!:${}()|\[\]\/\\])/g, '\\$1').replace(/\*/g, '.*').replace(/\$/g, '$');
+            if (new RegExp(regexStr).test(currentPath)) {
+              robotsStatus.allowed = (directive === 'allow');
+              robotsStatus.rule = line;
+            }
+          }
+        }
+      }
+    }
+  } catch(e) {}
+  
+  
+
   
   const perf = {};
   try {
@@ -633,6 +675,17 @@ const hiddenContent = (() => {
       });
     }
 
+    
+    if (robotsStatus && !robotsStatus.allowed) {
+      conflicts.push({
+        severity : 'error',
+        type     : 'Blocked by robots.txt',
+        detail   : 'Current URL is blocked in robots.txt. Search engines will not crawl this page.',
+        current  : robotsStatus.rule,
+        fix      : 'Remove the Disallow rule in robots.txt if this page should be indexed.',
+      });
+    }
+
     return conflicts;
   })();
 
@@ -727,7 +780,7 @@ const hiddenContent = (() => {
     perf, rendering, urlAnalysis,
     hreflang, pagination,
     security, crawl, unsafeExtLinks,
-    hiddenContent, seoConflicts, pageHeaders,
+    hiddenContent, seoConflicts, pageHeaders, robotsStatus,
   };
 }
 
@@ -779,7 +832,7 @@ function renderAll(d) {
     d.security.isHttps,
     d.security.mixedContent.length === 0,
     d.security.unsafeLinks === 0,
-    !d.crawl.noindex,
+    !d.crawl.noindex && d.robotsStatus.allowed,
     d.crawl.totalLinks <= 150,
     d.content.topKeywords.length > 0,
     !!d.perf.favicon.found,
@@ -852,8 +905,8 @@ function renderAll(d) {
       +(d.security.unsafeLinks?b(d.security.unsafeLinks+' unsafe links','orange'):b('Links safe','green'))
     +'</td></tr>'
     +'<tr><th>Crawlability</th><td>'
-      +(d.crawl.noindex?b('NOINDEX!','red'):b('Indexable','green'))+' '
-      +(d.crawl.tooManyLinks?b(d.crawl.totalLinks+' links (>150)','orange'):b(d.crawl.totalLinks+' links OK','green'))
+      +(!d.robotsStatus.allowed ? b('Blocked (robots.txt)','red') : d.crawl.noindex ? b('NOINDEX!','red') : b('Indexable','green'))+' '
+      +(d.crawl.tooManyLinks ? b(d.crawl.totalLinks+' links (>150)','orange') : b(d.crawl.totalLinks+' links OK','green'))
     +'</td></tr>'
     +'<tr><th>Schema</th><td>'
       +(d.schema.length?b(d.schema.length+' type(s)','blue'):b('None','gray'))+' '
@@ -1431,6 +1484,23 @@ function renderAll(d) {
 
   secHtml += '<div class="section-title">Crawlability</div>';
   secHtml += '<table class="data-table">'
+    
+    +'<tr><th>robots.txt</th><td>'
+    +(d.robotsStatus.checked
+      ? (d.robotsStatus.allowed
+          ? b('Allowed','green') + (d.robotsStatus.rule ? ' <span style="font-size:9px;color:#94a3b8;">Matched: '+esc(d.robotsStatus.rule)+'</span>' : '')
+          : b('Blocked!','red') + ' <span style="font-size:9px;font-weight:700;color:#dc2626;">By: '+esc(d.robotsStatus.rule)+'</span>')
+      : b('Not found / Error','gray'))
+    +'</td></tr>'
+
+
+    +'<tr><th>Sitemap (XML)</th><td>'
+    +(d.robotsStatus.sitemaps && d.robotsStatus.sitemaps.length > 0
+      ? d.robotsStatus.sitemaps.map(s => '<a href="'+esc(s)+'" target="_blank" style="color:#2980b9;text-decoration:none;display:block;margin-bottom:2px;">'+b('Found','green')+' <span style="font-size:10px;word-break:break-all;">'+esc(s)+'</span></a>').join('')
+      : b('Not declared in robots.txt','orange') + '<br><small style="color:#92400e;">Consider adding a Sitemap directive to robots.txt</small>')
+    +'</td></tr>'
+    
+    
     +'<tr><th>Robots Meta</th><td>'+(cr.robotsMeta||'<span style="color:#94a3b8;">Not set (default: index, follow)</span>')+'<br>'
       +(cr.noindex?b('NOINDEX — page will NOT be indexed!','red'):b('Indexable','green'))+' '
       +(cr.nofollow?b('nofollow','orange'):'')+' '
