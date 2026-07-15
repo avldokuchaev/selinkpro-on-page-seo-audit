@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>SeLinkPro Lite</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      width: 860px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      margin: 0;
+      background: #f8fafc;
+      color: #334155;
+    }
+
+   
+    .header {
+      background: #fff;
+      padding: 10px 16px;
+      border-bottom: 1px solid #e2e8f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .brand { font-size: 15px; font-weight: 800; color: #2980b9; }
+
+    
+    .tabs-wrapper {
+      background: #fff;
+      border-bottom: 2px solid #e2e8f0;
+      overflow-x: auto;
+      white-space: nowrap;
+      scrollbar-width: none;
+    }
+    .tabs-wrapper::-webkit-scrollbar { display: none; }
+    .tabs { display: inline-flex; padding: 0 8px; }
+    .tab {
+      display: inline-block;
+      padding: 9px 11px;
+      font-size: 10px;
+      font-weight: 700;
+      color: #64748b;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      user-select: none;
+      white-space: nowrap;
+    }
+    .tab:hover { color: #2980b9; }
+    .tab.active { color: #2980b9; border-bottom-color: #2980b9; }
+
+   
+    .content {
+      padding: 12px;
+      height: 400px;
+      overflow-y: auto;
+      font-size: 12px;
+    }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+
+    
+    .data-table {
+      width: 100%; border-collapse: collapse; font-size: 11px;
+      margin-bottom: 12px; background: #fff;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      border-radius: 5px; overflow: hidden; table-layout: fixed;
+    }
+    .data-table th, .data-table td {
+      padding: 7px 9px; border-bottom: 1px solid #e2e8f0;
+      text-align: left; vertical-align: top; word-wrap: break-word;
+    }
+    .data-table th { background: #f1f5f9; font-weight: 600; color: #475569; width: 28%; }
+    .data-table tr:last-child td,
+    .data-table tr:last-child th { border-bottom: none; }
+    .list-table th { background: #e8edf2; width: auto; font-size: 10px; }
+    .list-table td { font-size: 10px; }
+
+    
+    .badge {
+      padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: 700;
+      display: inline-block; text-transform: uppercase; white-space: nowrap;
+    }
+    .bg-green  { background:#dcfce7; color:#166534; border:1px solid #bbf7d0; }
+    .bg-red    { background:#fee2e2; color:#991b1b; border:1px solid #fecaca; }
+    .bg-gray   { background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; }
+    .bg-orange { background:#ffedd5; color:#9a3412; border:1px solid #fed7aa; }
+    .bg-blue   { background:#dbeafe; color:#1e40af; border:1px solid #bfdbfe; }
+    .bg-purple { background:#ede9fe; color:#5b21b6; border:1px solid #ddd6fe; }
+    .bg-yellow { background:#fef9c3; color:#854d0e; border:1px solid #fde047; }
+    .bg-teal   { background:#ccfbf1; color:#0f766e; border:1px solid #99f6e4; }
+
+    
+    .alert {
+      padding: 7px 10px; border-radius: 4px; font-size: 11px;
+      margin-bottom: 8px; font-weight: 600; line-height: 1.4;
+    }
+    .alert-danger  { background:#fee2e2; color:#991b1b; border-left:3px solid #ef4444; }
+    .alert-warning { background:#fef9c3; color:#92400e; border-left:3px solid #f59e0b; }
+    .alert-success { background:#dcfce7; color:#166534; border-left:3px solid #22c55e; }
+    .alert-info    { background:#dbeafe; color:#1e40af; border-left:3px solid #3b82f6; }
+    .alert-gray    { background:#f8fafc; color:#475569; border-left:3px solid #94a3b8; }
+
+    
+    .h-tag {
+      margin-bottom: 3px; font-size: 11px; padding: 4px 7px;
+      background: #fff; border: 1px solid #e2e8f0; border-radius: 3px;
+    }
+    .h-tag.skip-error { background:#fff1f2; border-color:#fecaca; }
+    .h1 { margin-left:0;  border-left:3px solid #2980b9; font-weight:700; }
+    .h2 { margin-left:14px; border-left:3px solid #27ae60; }
+    .h3 { margin-left:28px; border-left:3px solid #f39c12; }
+    .h4 { margin-left:42px; border-left:3px solid #8e44ad; }
+    .h5 { margin-left:56px; border-left:3px solid #7f8c8d; }
+    .h6 { margin-left:70px; border-left:3px solid #bdc3c7; }
+    .tag-label { display:inline-block; width:22px; font-weight:700; color:#94a3b8; font-size:9px; }
+
+   
+    .metric-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:7px; margin-bottom:10px; }
+    .metric-card {
+      background:#fff; border:1px solid #e2e8f0; border-radius:6px;
+      padding:9px 8px; text-align:center;
+    }
+    .metric-val   { font-size:18px; font-weight:800; color:#1e293b; }
+    .metric-label { font-size:8.5px; text-transform:uppercase; font-weight:700; color:#94a3b8; margin-top:1px; }
+    .metric-sub   { font-size:9px; font-weight:700; margin-top:3px; }
+    .c-good   { color:#16a34a; }
+    .c-warn   { color:#d97706; }
+    .c-bad    { color:#dc2626; }
+    .c-neutral{ color:#475569; }
+
+    
+    .resource-block {
+      background:#fff; border:1px solid #e2e8f0; border-radius:5px;
+      margin-bottom:8px; overflow:hidden;
+    }
+    .resource-block-header {
+      background:#f1f5f9; padding:6px 10px; font-weight:700; font-size:11px;
+      color:#475569; display:flex; justify-content:space-between; align-items:center;
+      cursor:pointer;
+    }
+    .resource-block-header:hover { background:#e8edf2; }
+    .resource-block-body { padding:6px 8px; font-size:10px; }
+    .code-item {
+      background:#0f172a; color:#e2e8f0; font-family:monospace;
+      font-size:9.5px; padding:6px 8px; border-radius:3px;
+      margin-bottom:4px; white-space:pre-wrap; word-break:break-all;
+      max-height:80px; overflow-y:auto; line-height:1.4;
+    }
+    .script-url {
+      font-size:9.5px; color:#2980b9; word-break:break-all;
+      padding:3px 4px; background:#f8fafc; border-radius:2px;
+      margin-bottom:3px; display:block;
+    }
+
+    
+    .section-title {
+      font-weight:700; font-size:11px; color:#475569; margin:12px 0 6px;
+      text-transform:uppercase; letter-spacing:0.5px;
+      padding-bottom:4px; border-bottom:1px solid #e2e8f0;
+    }
+
+    
+    .footer {
+      background:#eaf4fd; padding:9px 14px;
+      border-top:1px solid #b9d8f3;
+      display:flex; justify-content:space-between; align-items:center;
+    }
+    .footer-btn {
+      background:#27ae60; color:#fff; text-decoration:none;
+      padding:7px 14px; border-radius:4px;
+      font-weight:800; font-size:11px;
+    }
+    .footer-btn:hover { background:#219653; }
+    .footer-text { font-size:10px; color:#2c3e50; font-weight:600; line-height:1.4; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="brand">SeLinkPro Lite</div>
+    <div id="quickStats" style="font-size:10px; font-weight:700; color:#64748b;"></div>
+  </div>
+
+  <div class="tabs-wrapper">
+    <div class="tabs">
+      <div class="tab active" data-target="tab-meta">Summary</div>
+      <div class="tab" data-target="tab-headers">Headers</div>
+      <div class="tab" data-target="tab-links-int">Int.Links (<span id="cnt-int">0</span>)</div>
+      <div class="tab" data-target="tab-links-ext">Ext.Links (<span id="cnt-ext">0</span>)</div>
+      <div class="tab" data-target="tab-images">Images</div>
+      <div class="tab" data-target="tab-social">Social &amp; Schema</div>
+      <div class="tab" data-target="tab-security">Security</div>
+      <div class="tab" data-target="tab-perf">Perf &amp; Tech</div>
+      <div class="tab" data-target="tab-advanced">Advanced</div>
+    </div>
+  </div>
+
+  <div class="content">
+    <div id="loading" style="text-align:center;padding:50px 0;font-weight:700;color:#94a3b8;">
+      Scanning page DOM...
+    </div>
+    <div id="tab-meta"      class="tab-pane active"></div>
+    <div id="tab-headers"   class="tab-pane"></div>
+    <div id="tab-links-int" class="tab-pane"></div>
+    <div id="tab-links-ext" class="tab-pane"></div>
+    <div id="tab-images"    class="tab-pane"></div>
+    <div id="tab-social"    class="tab-pane"></div>
+    <div id="tab-security" class="tab-pane"></div>
+    <div id="tab-perf"      class="tab-pane"></div>
+    <div id="tab-advanced"  class="tab-pane"></div>
+  </div>
+
+  <div class="footer">
+    <div class="footer-text">
+      Find Indexation Blockers, PBNs<br>&amp; Build Interlinking Matrices
+    </div>
+    <a href="https://selinkpro.com"
+       target="_blank" class="footer-btn">Run Deep Technical Audit 🚀</a>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
