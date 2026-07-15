@@ -40,10 +40,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
-function scrapePageData() {
+async function scrapePageData() {
 
   const getMeta = sel => document.querySelector(sel)?.content || '';
   const getHref = sel => document.querySelector(sel)?.href    || '';
+
+  const pageHeaders = {};
+  try {
+    const resp = await fetch(location.href, { method: 'HEAD' });
+    for (const [k, v] of resp.headers.entries()) {
+      pageHeaders[k] = v;
+    }
+  } catch(e) {}
 
   
   const perf = {};
@@ -146,25 +154,51 @@ function scrapePageData() {
   perf.resourceHints = resourceHints;
 
   
+  
   const cwv = { lcp: null, cls: null, lcpElement: '', longTasks: 0 };
-  try {
-    const lcpEntries = performance.getEntriesByType('largest-contentful-paint');
-    if (lcpEntries.length) {
-      const last = lcpEntries[lcpEntries.length - 1];
-      cwv.lcp = Math.round(last.startTime);
-      if (last.element) {
-        const el = last.element;
-        cwv.lcpElement = el.tagName + (el.id ? '#'+el.id : '') + (el.className ? '.'+String(el.className).split(' ')[0] : '');
-      }
-    }
-    const clsEntries = performance.getEntriesByType('layout-shift');
-    if (clsEntries.length) {
-      cwv.cls = clsEntries.reduce((sum, e) => sum + e.value, 0).toFixed(4);
-    }
-    const ltEntries = performance.getEntriesByType('longtask');
-    cwv.longTasks = ltEntries.length;
-  } catch(e) {}
+  
+  await new Promise(resolve => {
+    
+    try {
+      new PerformanceObserver((list) => {
+        const entries = list.getEntries();
+        const last = entries[entries.length - 1];
+        if (last) {
+          cwv.lcp = Math.round(last.startTime);
+          if (last.element) {
+            const el = last.element;
+            cwv.lcpElement = el.tagName.toLowerCase() + (el.id ? '#'+el.id : '') + (el.className ? '.'+String(el.className).split(' ')[0] : '');
+          }
+        }
+      }).observe({ type: 'largest-contentful-paint', buffered: true });
+    } catch(e) {}
+
+    
+    try {
+      let clsValue = 0;
+      new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          if (!entry.hadRecentInput) clsValue += entry.value;
+        }
+        cwv.cls = clsValue.toFixed(4);
+      }).observe({ type: 'layout-shift', buffered: true });
+    } catch(e) {}
+
+    
+    try {
+      let ltCount = 0;
+      new PerformanceObserver((list) => {
+        ltCount += list.getEntries().length;
+        cwv.longTasks = ltCount;
+      }).observe({ type: 'longtask', buffered: true });
+    } catch(e) {}
+
+    
+    setTimeout(resolve, 150);
+  });
+  
   perf.cwv = cwv;
+  
 
   
   const rendering = (() => {
@@ -277,9 +311,17 @@ function scrapePageData() {
   const unsafeExtLinks = links.external.filter(l => !l.noOpener);
 
   
+  
+  const imgPerf = performance.getEntriesByType('resource').filter(r => r.initiatorType === 'img' || r.name.match(/\.(png|jpg|jpeg|webp|avif|gif)/i));
   const images = Array.from(document.images).map(img => {
     const src = img.src || '';
     const ext = src.split('?')[0].split('.').pop().toLowerCase();
+    
+    const res = imgPerf.find(r => r.name === src);
+    // Используем decodedBodySize (если из кэша) или transferSize (по сети)
+    const sizeBytes = res ? (res.decodedBodySize || res.transferSize) : 0;
+    const sizeKB = sizeBytes ? (sizeBytes / 1024).toFixed(1) : null;
+
     return {
       src, alt: img.getAttribute('alt') !== null ? img.alt.trim() : null,
       width: img.naturalWidth||img.width||0, height: img.naturalHeight||img.height||0,
@@ -287,8 +329,10 @@ function scrapePageData() {
       hasDimensions: !!(img.getAttribute('width') && img.getAttribute('height')),
       format: ext,
       isModernFormat: ['webp','avif','jxl'].includes(ext),
+      sizeKB: sizeKB
     };
   });
+  
 
   
   const og = {}, twitter = {};
@@ -683,7 +727,7 @@ const hiddenContent = (() => {
     perf, rendering, urlAnalysis,
     hreflang, pagination,
     security, crawl, unsafeExtLinks,
-    hiddenContent, seoConflicts,
+    hiddenContent, seoConflicts, pageHeaders,
   };
 }
 
@@ -895,18 +939,21 @@ function renderAll(d) {
     if (modernN > 0)   imgAlerts+='<div class="alert alert-success">&#10003; '+modernN+' modern format image(s) (WebP/AVIF)</div>';
     if (lazyN > 0)     imgAlerts+='<div class="alert alert-info">&#8505; '+lazyN+' image(s) lazy loaded</div>';
   }
+  
   let imgTable = '<table class="data-table list-table"><thead><tr>'
-    +'<th style="width:44%">Source</th><th style="width:26%">ALT</th><th style="width:14%">Format</th><th style="width:16%">Flags</th>'
+    +'<th style="width:36%">Source</th><th style="width:24%">ALT</th><th style="width:12%">Format</th><th style="width:12%">Size</th><th style="width:16%">Flags</th>'
     +'</tr></thead><tbody>';
   d.images.forEach(img => {
     const altCell  = img.alt===null?b('No tag','red'):img.alt===''?b('Empty','orange'):esc(img.alt);
     const fmtBadge = img.isModernFormat?b(img.format,'teal'):b(img.format||'?','gray');
+    const sizeCell = img.sizeKB ? '<b>' + img.sizeKB + ' KB</b>' : '<span style="color:#94a3b8;font-size:9px;">N/A</span>';
     const flags    = [];
     if (!img.hasDimensions) flags.push(b('No size','orange'));
-    if (img.isLazy)          flags.push(b('Lazy','blue'));
+    if (img.isLazy)         flags.push(b('Lazy','blue'));
     imgTable += '<tr><td><a href="'+img.src+'" target="_blank" style="color:#2980b9;text-decoration:none;">'+esc(img.src)+'</a></td>'
-      +'<td>'+altCell+'</td><td>'+fmtBadge+'</td><td>'+flags.join(' ')+'</td></tr>';
+      +'<td>'+altCell+'</td><td>'+fmtBadge+'</td><td>'+sizeCell+'</td><td>'+flags.join(' ')+'</td></tr>';
   });
+  
   imgTable += '</tbody></table>';
   document.getElementById('tab-images').innerHTML = imgAlerts + imgTable;
 
@@ -1019,6 +1066,27 @@ function renderAll(d) {
     : '#ef4444';
 
   perfHtml += '<div class="section-title">HTTP Status & Server</div>';
+
+  
+  if (d.pageHeaders && Object.keys(d.pageHeaders).length > 0) {
+    let headersBody = '<table class="data-table list-table"><tbody>';
+    for (const [key, val] of Object.entries(d.pageHeaders)) {
+      
+      const isImportant = ['x-robots-tag', 'canonical', 'server', 'x-powered-by', 'cache-control'].includes(key);
+      headersBody += '<tr><td style="width:35%;font-weight:'+(isImportant?'700':'400')+';color:'+(isImportant?'#1e293b':'#64748b')+';">' + esc(key) + '</td>'
+        + '<td style="word-break:break-all;font-family:monospace;font-size:10px;">' + esc(val) + '</td></tr>';
+    }
+    headersBody += '</tbody></table>';
+    
+    
+    if (d.pageHeaders['x-robots-tag'] && /noindex/i.test(d.pageHeaders['x-robots-tag'])) {
+      perfHtml += '<div class="alert alert-danger" style="margin-bottom:8px;">&#10060; <b>x-robots-tag: noindex</b> found in HTTP headers! This page is blocked from indexing, even if the HTML robots meta tag says otherwise.</div>';
+    }
+    
+    perfHtml += collapsible('View Raw HTTP Headers', b(Object.keys(d.pageHeaders).length, 'gray'), headersBody, false);
+  }
+  
+
   perfHtml += '<div style="background:'+statusBg+';border:1px solid '+statusBorder+';border-radius:6px;padding:10px;margin-bottom:10px;">'
     
     +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">'
