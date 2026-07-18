@@ -287,19 +287,60 @@ async function scrapePageData() {
     textToHtml : htmlLen > 0 ? ((bodyText.length / htmlLen) * 100).toFixed(2) : 0,
   };
 
-  
   const stopWordsList = new Set(['the','a','an','and','or','but','in','on','at','to','for',
     'of','with','by','from','is','it','its','was','are','be','been','has','have','that',
     'this','as','not','he','she','they','we','you','i','do','did','will','would','can',
     'could','should','may','might','shall','their','there','then','than','so','if','my',
-    'our','your','his','her','also','more','about','up','out','no','what','which']);
-  const words = bodyText.toLowerCase().match(/\b[a-z]{3,}\b/g) || [];
-  const freqMap = {};
-  words.forEach(w => { if (!stopWordsList.has(w)) freqMap[w] = (freqMap[w]||0) + 1; });
-  const topKeywords = Object.entries(freqMap)
-    .sort((a,b) => b[1]-a[1]).slice(0, 15)
+    'our','your','his','her','also','more','about','up','out','no','what','which',
+    'как','для','что','это','так','все','от','до','из','за','на','по','при','со','об','без']);
+  
+  
+
+  const rawWords = bodyText.toLowerCase().match(/[a-zа-яё]+/g) || [];
+  const unigrams = {};
+  const bigrams = {};
+  const trigrams = {};
+
+  for (let i = 0; i < rawWords.length; i++) {
+    const w1 = rawWords[i];
+    const w1Valid = w1.length > 2 && !stopWordsList.has(w1);
+    
+    if (w1Valid) unigrams[w1] = (unigrams[w1] || 0) + 1;
+
+    if (i < rawWords.length - 1) {
+      const w2 = rawWords[i + 1];
+      const w2Valid = w2.length > 2 && !stopWordsList.has(w2);
+      if (w1Valid && w2Valid) {
+        const bi = w1 + ' ' + w2;
+        bigrams[bi] = (bigrams[bi] || 0) + 1;
+      }
+    }
+
+    if (i < rawWords.length - 2) {
+      const w2 = rawWords[i + 1];
+      const w3 = rawWords[i + 2];
+      const w3Valid = w3.length > 2 && !stopWordsList.has(w3);
+      if (w1Valid && w3Valid) {
+        const tri = w1 + ' ' + w2 + ' ' + w3;
+        trigrams[tri] = (trigrams[tri] || 0) + 1;
+      }
+    }
+  }
+
+  const getTop = (map) => Object.entries(map)
+    .sort((a,b) => b[1] - a[1])
+    .slice(0, 15)
     .map(([word, count]) => ({ word, count, density: ((count/wordCount)*100).toFixed(2) }));
-  content.topKeywords = topKeywords;
+
+  content.keywords = {
+    unigrams: getTop(unigrams),
+    bigrams: getTop(bigrams),
+    trigrams: getTop(trigrams)
+  };
+  
+  content.topKeywords = content.keywords.unigrams;
+
+ 
   content.thinContent = wordCount < 300;
   content.longParagraph = Array.from(document.querySelectorAll('p'))
     .map(p => p.innerText.trim().split(/\s+/).length)
@@ -389,10 +430,22 @@ async function scrapePageData() {
   document.querySelectorAll('meta[property^="og:"]').forEach(m  => og[m.getAttribute('property')]  = m.content);
   document.querySelectorAll('meta[name^="twitter:"]').forEach(m => twitter[m.getAttribute('name')] = m.content);
 
- 
+
   const schema = [];
   document.querySelectorAll('script[type="application/ld+json"]').forEach(s => {
     try { const p = JSON.parse(s.textContent); if (Array.isArray(p)) p.forEach(i=>schema.push(i)); else schema.push(p); } catch(e) {}
+  });
+
+  document.querySelectorAll('[itemscope]').forEach(el => {
+    if (el.parentElement && el.parentElement.closest('[itemscope]')) return;
+    const type = el.getAttribute('itemtype') || '';
+    const item = { '@type': type.split('/').pop() || 'Microdata' };
+    el.querySelectorAll('[itemprop]').forEach(propEl => {
+      const propName = propEl.getAttribute('itemprop');
+      const propValue = propEl.getAttribute('content') || propEl.getAttribute('href') || propEl.getAttribute('src') || propEl.innerText.trim();
+      if (!item[propName]) item[propName] = propValue;
+    });
+    schema.push(item);
   });
 
   
@@ -1637,26 +1690,40 @@ function renderAll(d) {
     +'</td></tr>'
     +'</table>';
 
-  
-  advHtml += '<div class="section-title">Keyword Density — Top 15 Words</div>';
-  if (d.content.topKeywords.length) {
+
+    advHtml += '<div class="section-title">Keyword Density</div>';
+  if (d.content.keywords.unigrams.length) {
     advHtml += '<div style="font-size:10px;color:#475569;margin-bottom:6px;">Top 3 keywords (blue) should match your target search queries. Density >3% for any single word may look spammy to Google.</div>';
-    advHtml += '<table class="data-table list-table"><thead><tr>'
-      +'<th style="width:40%">Keyword</th><th style="width:15%">Count</th><th style="width:45%">Density</th>'
-      +'</tr></thead><tbody>';
-    d.content.topKeywords.forEach((kw,i)=>{
-      const barW   = Math.min(100,Math.round((kw.count/d.content.topKeywords[0].count)*100));
-      const isHigh = parseFloat(kw.density) > 3;
-      advHtml += '<tr>'
-        +'<td><b style="color:'+(i<3?'#2980b9':'#334155')+';">'+esc(kw.word)+'</b>'+(isHigh?' '+b('High density','orange'):'')+'</td>'
-        +'<td>'+kw.count+'</td>'
-        +'<td><div style="display:flex;align-items:center;gap:5px;">'
-        +'<div style="background:#e2e8f0;border-radius:2px;height:7px;width:80px;overflow:hidden;">'
-        +'<div style="background:'+(isHigh?'#f59e0b':i<3?'#2980b9':'#94a3b8')+';width:'+barW+'%;height:100%;"></div></div>'
-        +'<span style="font-size:9px;color:'+(isHigh?'#d97706':'#64748b')+';">'+kw.density+'%</span>'
-        +'</div></td></tr>';
-    });
-    advHtml += '</tbody></table>';
+    
+    advHtml += '<div style="display:flex;gap:12px;margin-bottom:8px;border-bottom:1px solid #e2e8f0;">'
+      +'<span class="kw-tab active" data-kw="kw-uni" style="font-size:10px;font-weight:700;cursor:pointer;color:#2980b9;border-bottom:2px solid #2980b9;padding-bottom:4px;">1-Word</span>'
+      +'<span class="kw-tab" data-kw="kw-bi" style="font-size:10px;font-weight:700;cursor:pointer;color:#94a3b8;border-bottom:2px solid transparent;padding-bottom:4px;">2-Words</span>'
+      +'<span class="kw-tab" data-kw="kw-tri" style="font-size:10px;font-weight:700;cursor:pointer;color:#94a3b8;border-bottom:2px solid transparent;padding-bottom:4px;">3-Words</span>'
+      +'</div>';
+
+    function buildKwTable(kws, id, display) {
+      let html = '<div id="'+id+'" class="kw-pane" style="display:'+display+';">';
+      if (!kws.length) return html + '<div class="alert alert-gray">No data</div></div>';
+      html += '<table class="data-table list-table"><thead><tr><th style="width:40%">Keyword</th><th style="width:15%">Count</th><th style="width:45%">Density</th></tr></thead><tbody>';
+      kws.forEach((kw,i)=>{
+        const barW = Math.min(100,Math.round((kw.count/kws[0].count)*100));
+        const isHigh = parseFloat(kw.density) > 3;
+        html += '<tr>'
+          +'<td><b style="color:'+(i<3?'#2980b9':'#334155')+';">'+esc(kw.word)+'</b>'+(isHigh?' '+b('High','orange'):'')+'</td>'
+          +'<td>'+kw.count+'</td>'
+          +'<td><div style="display:flex;align-items:center;gap:5px;">'
+          +'<div style="background:#e2e8f0;border-radius:2px;height:7px;width:80px;overflow:hidden;">'
+          +'<div style="background:'+(isHigh?'#f59e0b':i<3?'#2980b9':'#94a3b8')+';width:'+barW+'%;height:100%;"></div></div>'
+          +'<span style="font-size:9px;color:'+(isHigh?'#d97706':'#64748b')+';">'+kw.density+'%</span>'
+          +'</div></td></tr>';
+      });
+      return html + '</tbody></table></div>';
+    }
+
+    advHtml += buildKwTable(d.content.keywords.unigrams, 'kw-uni', 'block');
+    advHtml += buildKwTable(d.content.keywords.bigrams, 'kw-bi', 'none');
+    advHtml += buildKwTable(d.content.keywords.trigrams, 'kw-tri', 'none');
+
     if (d.content.longParagraph > 0) {
       advHtml += '<div class="alert alert-warning" style="font-weight:400;">&#9888; <b>'+d.content.longParagraph+' paragraph(s) with 150+ words.</b> '
         +'Long walls of text hurt readability and dwell time. Break into shorter paragraphs (50-100 words max), add subheadings (H2/H3), use bullet points.</div>';
@@ -1717,4 +1784,24 @@ function renderAll(d) {
   }
 
   document.getElementById('tab-advanced').innerHTML = advHtml;
+
+
+  document.querySelectorAll('.kw-tab').forEach(tab => {
+    tab.addEventListener('click', (e) => {
+      document.querySelectorAll('.kw-tab').forEach(t => {
+        t.classList.remove('active');
+        t.style.color = '#94a3b8';
+        t.style.borderBottomColor = 'transparent';
+      });
+      document.querySelectorAll('.kw-pane').forEach(p => p.style.display = 'none');
+      
+      const target = e.target;
+      target.classList.add('active');
+      target.style.color = '#2980b9';
+      target.style.borderBottomColor = '#2980b9';
+      document.getElementById(target.getAttribute('data-kw')).style.display = 'block';
+    });
+  });
+
+  
 }
