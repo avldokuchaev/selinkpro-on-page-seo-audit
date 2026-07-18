@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SeLinkPro Lite: On-Page SEO Audit, Status Code & Link Checker",
-  "version": "3.2",
+  "version": "3.3",
   "description": "SEO audit tool: check HTTP status, Meta, Schema, Headings, Link health, and Page Performance. Detect indexation issues instantly.",
   "permissions": [
     "activeTab",
