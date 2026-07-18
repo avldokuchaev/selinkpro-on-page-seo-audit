@@ -1,6 +1,6 @@
 # SeLinkPro Lite — Technical SEO Audit Extension 🚀
 
-[![Chrome Web Store](https://img.shields.io/badge/Chrome-Web_Store-blue.svg)](#) 
+[![Chrome Web Store](https://img.shields.io/badge/Chrome-Web_Store-blue.svg)](https://chrome.google.com/webstore/detail/flieplocaebnejkfgijgkojmkfcjigpa) 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
 **SeLinkPro Lite** is a professional-grade, browser-based diagnostic center for SEO specialists and developers. It performs a complete technical on-page SEO audit directly in your browser without sending any page data to third-party servers.
