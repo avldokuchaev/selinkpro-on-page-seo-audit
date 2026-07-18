@@ -357,10 +357,18 @@ async function scrapePageData() {
   const imgPerf = performance.getEntriesByType('resource').filter(r => r.initiatorType === 'img' || r.name.match(/\.(png|jpg|jpeg|webp|avif|gif)/i));
   const images = Array.from(document.images).map(img => {
     const src = img.src || '';
-    const ext = src.split('?')[0].split('.').pop().toLowerCase();
+    
+    let ext = 'unknown';
+    if (src.startsWith('data:image/')) {
+      ext = src.split(';')[0].split('/')[1] || 'data';
+    } else {
+      const cleanPath = src.split('?')[0].split('#')[0];
+      const match = cleanPath.match(/\.([a-z0-9]{2,5})$/i);
+      if (match) ext = match[1].toLowerCase();
+    }
     
     const res = imgPerf.find(r => r.name === src);
-    // Используем decodedBodySize (если из кэша) или transferSize (по сети)
+    
     const sizeBytes = res ? (res.decodedBodySize || res.transferSize) : 0;
     const sizeKB = sizeBytes ? (sizeBytes / 1024).toFixed(1) : null;
 
